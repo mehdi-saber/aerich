@@ -399,6 +399,38 @@ class Migrate:
                 old_fk_fields_name = list(map(lambda x: x.get("name"), old_fk_fields))
                 new_fk_fields_name = list(map(lambda x: x.get("name"), new_fk_fields))
 
+                old_fk_fields_refs = dict(map(lambda x: (x['name'], x.get("python_type")), old_fk_fields))
+                new_fk_fields_refs = dict(map(lambda x: (x['name'], x.get("python_type")), new_fk_fields))
+
+                # change fk refrence
+                changed_fk_field_name = filter(
+                    lambda field_name: old_fk_fields_refs[field_name] != new_fk_fields_refs[field_name],
+                    {*new_fk_fields_refs.keys()}.intersection({*old_fk_fields_refs.keys()})
+                )
+                for field_name in changed_fk_field_name:
+                    old_fk_field = next(
+                        filter(lambda x: x.get("name") == field_name, old_fk_fields)
+                    )
+                    if old_fk_field.get("db_constraint"):
+                        cls._add_operator(
+                            cls._drop_fk(
+                                model, old_fk_field, old_models.get(old_fk_field.get("python_type"))
+                            ),
+                            upgrade,
+                            fk_m2m_index=True,
+                        )
+                    fk_field = next(
+                        filter(lambda x: x.get("name") == field_name, new_fk_fields)
+                    )
+                    if fk_field.get("db_constraint"):
+                        cls._add_operator(
+                            cls._add_fk(
+                                model, fk_field, new_models.get(fk_field.get("python_type"))
+                            ),
+                            upgrade,
+                            fk_m2m_index=True,
+                        )
+
                 # add fk
                 for new_fk_field_name in set(new_fk_fields_name).difference(
                     set(old_fk_fields_name)
